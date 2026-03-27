@@ -1,7 +1,9 @@
+import sys
+sys.path.insert(0, "/home/robotics/ultralytics-env/lib/python3.13/site-packages")
+
 from picamera2 import Picamera2
 from ultralytics import YOLO
 import os
-import sys
 import csv
 import subprocess
 from datetime import datetime
@@ -9,7 +11,6 @@ from datetime import datetime
 MODEL_PATH = "YOLOV8s/runs/detect/YOLOV8s-Head-Detection/weights/best.pt"
 CONF_THRESHOLD = 0.33
 IOU_THRESHOLD = 0.5
-CSV_FILE = "people_count.csv"
 
 timer = datetime.now().hour
 if timer < 8 or timer >= 20:
@@ -18,10 +19,15 @@ if timer < 8 or timer >= 20:
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
-# Foto maken
+# Weekmap bepalen
 now = datetime.now()
+iso = now.isocalendar()
+week_folder = os.path.join("Pictures", f"week_{iso[1]:02d}_{iso[0]}")
+os.makedirs(week_folder, exist_ok=True)
+
+# Foto maken
 formatted = now.strftime("%d%m%Y_%H%M%S")
-image_path = os.path.join("Pictures", formatted + ".jpeg")
+image_path = os.path.join(week_folder, formatted + ".jpeg")
 
 picam2 = Picamera2()
 config = picam2.create_still_configuration()
@@ -35,15 +41,16 @@ model = YOLO(MODEL_PATH)
 results = model(image_path, conf=CONF_THRESHOLD, iou=IOU_THRESHOLD, verbose=False)[0]
 people_count = len(results.boxes)
 
-# Opslaan in CSV
-write_header = not os.path.exists(CSV_FILE)
-with open(CSV_FILE, "a", newline="") as f:
+# Opslaan in CSV in de weekmap
+csv_file = os.path.join(week_folder, "people_count.csv")
+write_header = not os.path.exists(csv_file)
+with open(csv_file, "a", newline="") as f:
     writer = csv.writer(f)
     if write_header:
         writer.writerow(["bestandsnaam", "aantal_mensen"])
     writer.writerow([formatted + ".jpeg", people_count])
 
 # Push naar GitHub
-subprocess.run(["git", "add", "Pictures/", CSV_FILE], check=True)
+subprocess.run(["git", "add", week_folder], check=True)
 subprocess.run(["git", "commit", "-m", f"Foto en telling {formatted}"], check=True)
 subprocess.run(["git", "push", "github", "main"], check=True)
